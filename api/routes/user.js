@@ -64,6 +64,7 @@ router.post("/signup",upload.single('avatar'), (req,res,next) => {
 
 // Login
 router.post("/login", (req,res,next) => {
+    console.log('login', process.env.TOKEN_SECRET)
     User.find({ email : req.body.email }).exec().then(user => {
         if(user.length < 1){
            return res.status(422).json({
@@ -80,7 +81,7 @@ router.post("/login", (req,res,next) => {
             const token = jwt.sign({ 
                 email : user[0].email,
                 password : user[0].password,
-             }, 'secret' , {
+             }, process.env.TOKEN_SECRET , {
                 expiresIn : '2h'
              });
             return res.status(200).json({
@@ -110,6 +111,63 @@ router.get("/avatar/:id",checkAuth, (req,res,next)=> {
       
 })
 
+// Update user profile
+
+router.put("/:id",upload.single('avatar'), (req,res,next)=> {
+    const id = req.params.id;
+    bcrypt.hash(req.body.password, 10, function(err, hash) {
+        if(err){
+            res.status(500).json({
+                error : err
+            });
+        } else {
+            User.findById(id).exec().then(data => {
+                try {
+                    const user = new User({
+                        _id : id,
+                        email : req.body.email ? req.body.email : data.email,
+                        password : req.body.password ? hash : data.password,
+                        avatar : req.file.path ? req.file.path : data.avatar
+                    });
+            
+                User.findByIdAndUpdate(id , user).then(result => {
+                    res.status(201).json({
+                        msg : 'Profile  has been deleted',
+                        User : result
+                    });
+                }).catch(err => {
+                    res.status(500).json({
+                        error : err
+                    });
+                });
+                  } catch (err) {
+                    return res.status(400).send(err);
+                  }
+             }).catch(err => { 
+                res.status(500).json({
+                    err : err
+                });
+             });
+        }
+        
+    });
+    
+})
+
+router.delete("/:id",checkAuth, (req,res,next)=> {
+    const id = req.params.id;
+    User.findByIdAndDelete(id).then(result => {
+        res.status(201).json({
+            msg : 'User  has been deleted'
+        });
+    }).catch(err => {
+        res.status(500).json({
+            error : err
+        });
+    });
+})
+
+// Delete user avatar 
 router.delete("/avatar/:id",checkAuth, (req,res,next)=> {
     const id = req.params.id;
     User.findById(id).exec().then(data => {
@@ -145,5 +203,20 @@ router.delete("/avatar/:id",checkAuth, (req,res,next)=> {
       
 })
 
+// Logout user token
+
+router.get('/logout', ( req,res,next)=> {
+    try{
+        const token = req.headers.authorization.split(" ")[1];
+        const decode =  jwt.delete(token, process.env.TOKEN_SECRET);
+        return res.status(200).json({
+            message : 'Logout success'
+          })
+    } catch(error){
+      return res.status(401).json({
+        message : 'Logout failed.Please provide the token'
+      })
+    }
+});
 
 module.exports = router;
